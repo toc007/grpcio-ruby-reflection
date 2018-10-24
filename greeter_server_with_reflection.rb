@@ -23,18 +23,14 @@ lib_dir = File.join(this_dir, 'lib')
 $LOAD_PATH.unshift(lib_dir) unless $LOAD_PATH.include?(lib_dir)
 
 require 'grpc'
+require 'reflection_services_pb'
 require 'reflection_pb'
-#require 'helloworld_services_pb'
 
-# GreeterServer is simple server that implements the Helloworld Greeter server.
+# ReflectionServer implements the ServerReflection template
 class ReflectionServer < Grpc::Reflection::V1alpha::ServerReflection::Service
   def server_reflection_info(reflect_req)
-    ReflectionServer.new(reflect_req).each_item
-  end
-
-  # say_hello implements the SayHello rpc method.
-  def say_hello(hello_req, _unused_call)
-    Helloworld::HelloReply.new(message: "Hello #{hello_req.name}")
+    p "server_reflection_info called"
+    ReflectionEnumerator.new(reflect_req).each_item
   end
 end
 
@@ -48,8 +44,27 @@ class ReflectionEnumerator
     return enum_for(:each_item) unless block_given?
     begin
       # send back the earlier messages at this point
-      earlier_msgs.each do |r|
-        yield ServerReflectionResponse.new()
+      @requests.each do |r|
+        # Create a ServiceResponse
+        #   User specified or auto generated?
+        puts Grpc::Reflection::V1alpha::ServerReflection::Service.methods
+        service_names = ["hello", "world"]
+        services = service_names.map do |s| 
+          Grpc::Reflection::V1alpha::ServiceResponse.new(:name => s)
+        end
+
+        serviceResponse = Grpc::Reflection::V1alpha::ListServiceResponse.new(
+          :service => services
+        )
+        puts serviceResponse.class
+
+        response = Grpc::Reflection::V1alpha::ServerReflectionResponse.new(
+          :valid_host => "ruby_reflection_server",
+          :original_request => r,
+          :list_services_response => serviceResponse
+        )
+        puts response.to_s
+        yield response
       end
     rescue StandardError => e
       fail e # signal completion via an error
